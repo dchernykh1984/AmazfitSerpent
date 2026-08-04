@@ -1,8 +1,8 @@
 {
   "configVersion": "v3",
   "app": {
-    "appId": 1000001,
-    "appName": "Serpent",
+    "appId": 1122445,
+    "appName": "Snake Classic",
     "appType": "app",
     "version": {
       "code": 100,
@@ -41,10 +41,10 @@
   },
   "i18n": {
     "en-US": {
-      "appName": "Serpent"
+      "appName": "Snake Classic"
     },
     "ru-RU": {
-      "appName": "Serpent"
+      "appName": "Snake Classic"
     }
   },
   "defaultLanguage": "en-US"
