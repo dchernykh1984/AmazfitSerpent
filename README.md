@@ -1,8 +1,11 @@
 # Amazfit Serpent
 
-**Serpent** is the classic snake game as a **Zepp OS mini app** for round Amazfit
-watches. Swipe to steer, eat the pellet, grow, and try not to bite yourself or the
-wall. Everything runs on the watch: no phone, no network, no account.
+**Snake Classic** is the classic snake game as a **Zepp OS mini app** for round
+Amazfit watches. Swipe to steer, eat the pellet, grow, and try not to bite yourself
+or the wall. Everything runs on the watch: no phone, no network, no account.
+
+(The repository is named `AmazfitSerpent`; **Snake Classic** is the name the app is
+registered under in the Zepp App Store.)
 
 - **Board** - a 15x15 grid inscribed in the round screen, with the score in the cap
   above it and the pause button in the cap below.
@@ -76,12 +79,13 @@ test can reach it without a watch, and `page/index.js` only turns that into widg
 and reacts to swipes. A step redraws just the three cells that changed, rather than
 repainting the board, so the game keeps up at the fastest level.
 
-### Before it runs on a watch
+### App identity
 
-`app.json` carries the placeholder **`"appId": 1000001`**. Register the app in the
-[Zepp developer console](https://console.zepp.com/) and put the real id there first:
-the dev preview is cloud-mediated, and an unregistered appId makes the watch install
-the app but silently refuse to launch its screen.
+The app is registered in the [Zepp developer console](https://console.zepp.com/) as
+**Snake Classic**, appId **`1122445`** - both live in `app.json`. Keep them as they
+are: the dev preview and `zeus dev` are cloud-mediated, and an appId that is not
+registered to the signed-in account makes the watch install the app but silently
+refuse to launch its screen, with no error to go on.
 
 ## Pre-commit hooks (contributors)
 
