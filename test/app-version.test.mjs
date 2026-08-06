@@ -24,7 +24,13 @@ function runScript({ released, name, code }, ...args) {
     app.app.version = { code, name };
     writeFileSync(join(dir, "app.json"), JSON.stringify(app, null, 2) + "\n");
 
-    const run = spawnSync(process.execPath, [join(dir, SCRIPT), ...args], { encoding: "utf8" });
+    // Run it from inside the throwaway checkout. Without a cwd the child inherits
+    // vitest's, which is this repository - and a script that ever resolved its
+    // files from the working directory would edit the real app.json.
+    const run = spawnSync(process.execPath, [join(dir, SCRIPT), ...args], {
+      cwd: dir,
+      encoding: "utf8",
+    });
     return {
       status: run.status,
       output: run.stdout + run.stderr,
