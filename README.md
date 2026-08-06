@@ -67,6 +67,7 @@ lib/                     PURE, unit-tested logic (no Zepp OS imports)
   speed.js               difficulty levels and the tick pacing
   scores.js              the persisted high score, per difficulty
   i18n/                  keys.js (the contract), labels.js (11 tables), index.js
+scripts/                 sync-app-version.mjs, the app.json version writer
 page/index.js            the watch screen: drawing, gestures, the game loop
 page/index.r.layout.js   the layout module Zepp OS requires per page
 utils/config/            device.js (screen size), constants.js (grid, colors)
