@@ -106,9 +106,8 @@ Every pull request must pass the required checks: Prettier, ESLint, the unit tes
 
 Releases are automated with `release-please`: it maintains a version-bump PR from the
 Conventional Commits and, when merged, tags a GitHub Release. The release build
-workflow then produces the `.zab` store bundle and attaches it, deriving the Zepp
-`version.name` / `version.code` from `package.json`. Uploading the `.zab` to the Zepp
-App Store stays manual, because Zepp has no public publish API.
+workflow then produces the `.zab` store bundle and attaches it. Uploading the `.zab`
+to the Zepp App Store stays manual, because Zepp has no public publish API.
 
 ### Two version numbers
 
