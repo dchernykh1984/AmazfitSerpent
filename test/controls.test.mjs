@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { controlLayout, hitTest, UP, DOWN, LEFT, RIGHT, PAUSE } from "../lib/controls.js";
 import { boardLayout } from "../lib/board.js";
-import { GRID_CELLS } from "../utils/config/constants.js";
+import { BOARD_EDGE, GRID_CELLS } from "../utils/config/constants.js";
 
 // The two round screens the app is built for, taken from what actually ships.
 const SCREENS = [466, 480];
@@ -48,6 +48,26 @@ describe("controlLayout", () => {
           reach(control, screen),
           `screen ${screen} ${JSON.stringify(control)}`
         ).toBeLessThanOrEqual(screen / 2);
+      }
+    }
+  });
+
+  it("keeps every control off the frame drawn around the board", () => {
+    // A control's box is wiped to the background before its icon is painted, so a
+    // box that reached the frame would rub the frame out every time it was
+    // pressed. The frame is BOARD_EDGE thick, just outside the board.
+    for (const screen of SCREENS) {
+      const layout = layoutFor(screen);
+      const framed = {
+        x: layout.board.x - BOARD_EDGE,
+        y: layout.board.y - BOARD_EDGE,
+        w: layout.board.w + 2 * BOARD_EDGE,
+        h: layout.board.h + 2 * BOARD_EDGE,
+      };
+      for (const control of boxes(layout)) {
+        expect(overlaps(control, framed), `screen ${screen} ${JSON.stringify(control)}`).toBe(
+          false
+        );
       }
     }
   });
