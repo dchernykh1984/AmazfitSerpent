@@ -16,6 +16,12 @@ export const COLOR_FOOD = 0xff5a3c;
 export const COLOR_TEXT = 0xffffff;
 export const COLOR_MUTED = 0x9aa4ab;
 export const COLOR_BUTTON = 0x1d262c;
+
+// The steering arrows and the pause icon, drawn in the segments around the board.
+// Bright enough to aim at without competing with the snake for attention, and a
+// lift on press so a tap is visibly registered.
+export const COLOR_ARROW = 0x7f8c96;
+export const COLOR_ARROW_PRESSED = 0xe8f0f5;
 export const COLOR_BUTTON_PRESSED = 0x2f3d46;
 
 // The thickness of the frame drawn around the board, and the padding kept
