@@ -514,6 +514,15 @@ Page({
   // is why the board is repainted rather than left where it was.
   paintPlayScreen() {
     this.drawControls();
+    // The food widget is normally moved rather than remade, but not here: the
+    // canvas above was just created, and anything older than it sits underneath.
+    // drawSnake already rebuilds every cell, so dropping the food is what keeps
+    // the whole board on the same side of the canvas instead of leaving one
+    // pellet behind it.
+    if (this.state.food) {
+      hmUI.deleteWidget(this.state.food);
+      this.state.food = null;
+    }
     this.drawSnake();
     this.drawFood();
     this.drawScore();

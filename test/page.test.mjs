@@ -195,6 +195,25 @@ describe("the pause control", () => {
     expect(hasButton(EN.resume)).toBe(true);
   });
 
+  it("puts the whole board back above the canvas on resume", async () => {
+    // The canvas is remade when the game resumes, and widgets older than it sit
+    // underneath. Every cell is rebuilt by drawSnake; the food has to be too, or
+    // one pellet is left behind the canvas.
+    const page = await startGame();
+    const foodBefore = page.state.food;
+    tapControl("pause");
+    button(EN.resume).tap();
+
+    expect(page.state.food).not.toBe(foodBefore);
+    expect(foodBefore.deleted).toBe(true);
+    const order = ui.screen.widgets;
+    const canvasAt = order.indexOf(canvas());
+    expect(order.indexOf(page.state.food)).toBeGreaterThan(canvasAt);
+    for (const cell of page.state.bodies) {
+      expect(order.indexOf(cell)).toBeGreaterThan(canvasAt);
+    }
+  });
+
   it("leaves the snake exactly where it was", async () => {
     const page = await startGame();
     page.tick();
