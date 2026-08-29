@@ -12,6 +12,16 @@ import { setPageBrightTime, resetPageBrightTime } from "@zos/display";
 import { LocalStorage } from "@zos/storage";
 
 import { boardLayout, cellRect } from "../lib/board.js";
+import { arrowMetrics, arrowStrokes, pauseStrokes } from "../lib/arrow.js";
+import {
+  controlLayout,
+  hitTest,
+  PAUSE,
+  UP as CONTROL_UP,
+  DOWN as CONTROL_DOWN,
+  LEFT as CONTROL_LEFT,
+  RIGHT as CONTROL_RIGHT,
+} from "../lib/controls.js";
 import { centeredBox } from "../lib/round-geometry.js";
 import { labelFor, languageFromZeppCode } from "../lib/i18n/index.js";
 import { bestKey, LEVEL_KEY, normalizeScore, updateBest } from "../lib/scores.js";
@@ -25,6 +35,8 @@ import {
   COLOR_BACKGROUND,
   COLOR_BOARD,
   COLOR_BOARD_EDGE,
+  COLOR_ARROW,
+  COLOR_ARROW_PRESSED,
   COLOR_BUTTON,
   COLOR_BUTTON_PRESSED,
   COLOR_FOOD,
@@ -36,10 +48,22 @@ import {
   SCREEN_PADDING,
 } from "../utils/config/constants.js";
 
-// The board is the inscribed square; what is left is a circular cap above it (the
-// score) and below it (the pause button).
+// The board is the inscribed square; what is left is a ring of four segments -
+// dead space on a round watch, and where the controls go. The score shares the
+// top segment with the up arrow; pause shares the bottom one with the down arrow.
 const BOARD = boardLayout(SCREEN_SIZE, GRID_CELLS);
-const BOARD_BOTTOM = BOARD.y + BOARD.size;
+const CONTROLS = controlLayout(SCREEN_SIZE, BOARD);
+
+// The four arrows share one size so they read as a set; pause is drawn at the
+// same stroke weight for the same reason.
+const ARROW_SIZE = arrowMetrics([CONTROLS.up, CONTROLS.down, CONTROLS.left, CONTROLS.right]);
+
+// Which way each arrow steers.
+const STEERING = {};
+STEERING[CONTROL_UP] = UP;
+STEERING[CONTROL_DOWN] = DOWN;
+STEERING[CONTROL_LEFT] = LEFT;
+STEERING[CONTROL_RIGHT] = RIGHT;
 
 // Menu type scale, derived from the board so it holds on any round size.
 const TEXT_BIG = Math.round(BOARD.size * 0.13);
@@ -112,12 +136,16 @@ Page({
     timer: null,
     destroyed: false,
     // Widgets, grouped by lifetime: the frame lives as long as the page, the
-    // board cells and the score as long as a game, the pause button and the menu
-    // as long as a screen.
+    // board cells and the score as long as a game, the control canvas and the
+    // menu as long as a screen.
     bodies: [],
     food: null,
     score: null,
-    pause: null,
+    canvas: null,
+    // Which control is currently held down, so it can be un-highlighted when the
+    // finger lifts. A canvas keeps no scene graph: "unpressed" means painting the
+    // control again.
+    pressed: null,
     menu: [],
   },
 
@@ -240,10 +268,7 @@ Page({
     this.clearMenu();
     this.state.screen = "playing";
     this.state.game = createGame(BOARD.cells, BOARD.cells);
-    this.drawSnake();
-    this.drawFood();
-    this.drawScore();
-    this.setPauseVisible(true);
+    this.paintPlayScreen();
     this.scheduleTick();
   },
 
@@ -253,7 +278,7 @@ Page({
     }
     this.stopTimer();
     this.state.screen = "paused";
-    this.setPauseVisible(false);
+    this.clearControls();
     this.drawMenu([
       { kind: "text", height: TEXT_BIG, color: COLOR_TEXT, text: this.text("paused") },
       { kind: "gap", height: STACK_GAP },
@@ -272,7 +297,7 @@ Page({
     }
     this.clearMenu();
     this.state.screen = "playing";
-    this.setPauseVisible(true);
+    this.paintPlayScreen();
     this.scheduleTick();
   },
 
@@ -288,7 +313,7 @@ Page({
       writeNumber(this.state.storage, bestKey(this.state.level), result.best);
     }
 
-    this.setPauseVisible(false);
+    this.clearControls();
     this.drawMenu([
       { kind: "text", height: TEXT_BIG, color: COLOR_TEXT, text: this.text("game_over") },
       { kind: "gap", height: STACK_GAP },
@@ -476,38 +501,124 @@ Page({
     if (!this.state.game) {
       return;
     }
-    const height = Math.round(BOARD.y * 0.5);
-    const box = centeredBox(
-      SCREEN_SIZE,
-      Math.round(BOARD.y * 0.3),
-      height,
-      BOARD.size,
-      SCREEN_PADDING
-    );
+    const box = CONTROLS.score;
     const text = String(this.state.game.score);
-    this.state.score = this.createText(box, Math.round(height * 0.8), COLOR_TEXT, text);
+    this.state.score = this.createText(box, Math.round(box.h * 0.8), COLOR_TEXT, text);
   },
 
-  // The pause button, in the cap below the board. It exists only while a game is
-  // actually running, so it cannot be tapped on a menu that is covering it.
-  setPauseVisible(visible) {
-    if (this.state.pause) {
-      hmUI.deleteWidget(this.state.pause);
-      this.state.pause = null;
+  // Everything on the play screen, in the order that keeps the snake on top.
+  //
+  // The control canvas is full-screen, so it has to be created BEFORE the board
+  // cells: widgets drawn later sit above it, and a canvas made afterwards would
+  // cover the snake. Resuming from the pause menu goes through here too, which
+  // is why the board is repainted rather than left where it was.
+  paintPlayScreen() {
+    this.drawControls();
+    this.drawSnake();
+    this.drawFood();
+    this.drawScore();
+  },
+
+  // The four arrows and the pause icon, drawn on one canvas that covers the whole
+  // screen and catches every tap on them.
+  //
+  // It is DELETED whenever a menu opens, and that is not tidiness - it is
+  // required. A listening canvas swallows the touch even where a button is drawn
+  // on top of it, so leaving it up makes every menu button dead. The sibling
+  // Sokoban app found this on a real device.
+  drawControls() {
+    if (!this.state.canvas) {
+      const canvas = hmUI.createWidget(hmUI.widget.CANVAS, {
+        x: 0,
+        y: 0,
+        w: SCREEN_SIZE,
+        h: SCREEN_SIZE,
+      });
+      try {
+        canvas.addEventListener(hmUI.event.CLICK_DOWN, (info) => this.onControlDown(info));
+        canvas.addEventListener(hmUI.event.CLICK_UP, (info) => this.onControlUp(info));
+      } catch {
+        // A firmware that does not deliver canvas taps leaves the arrows drawn
+        // but dead; swiping still steers, which beats a page that threw while it
+        // was being built and left the screen black.
+      }
+      this.state.canvas = canvas;
     }
-    if (!visible) {
+    this.state.pressed = null;
+    const names = [CONTROL_UP, CONTROL_DOWN, CONTROL_LEFT, CONTROL_RIGHT, PAUSE];
+    for (let i = 0; i < names.length; i++) {
+      this.paintControl(names[i], false);
+    }
+  },
+
+  // One control, painted over whatever was there. A canvas keeps no scene graph,
+  // so the box is wiped to the background first: without that, the un-pressed
+  // icon would be drawn underneath the pressed one still on screen.
+  paintControl(name, pressed) {
+    const canvas = this.state.canvas;
+    const area = CONTROLS[name];
+    if (!canvas || !area) {
       return;
     }
-    const capHeight = SCREEN_SIZE - BOARD_BOTTOM;
-    const height = Math.round(capHeight * 0.55);
-    const box = centeredBox(
-      SCREEN_SIZE,
-      BOARD_BOTTOM + Math.round(capHeight * 0.1),
-      height,
-      MAX_MENU_WIDTH,
-      SCREEN_PADDING
-    );
-    this.state.pause = this.createButton(box, this.text("pause"), () => this.pauseGame());
+    canvas.drawRect({
+      x1: area.x,
+      y1: area.y,
+      x2: area.x + area.w,
+      y2: area.y + area.h,
+      color: COLOR_BACKGROUND,
+    });
+    const color = pressed ? COLOR_ARROW_PRESSED : COLOR_ARROW;
+    const strokes =
+      name === PAUSE
+        ? pauseStrokes(area, color, ARROW_SIZE)
+        : arrowStrokes(name, area, color, ARROW_SIZE);
+    for (let i = 0; i < strokes.length; i++) {
+      const line = strokes[i];
+      canvas.setPaint({ color: line.color, line_width: line.width });
+      canvas.drawLine({ x1: line.x1, y1: line.y1, x2: line.x2, y2: line.y2, color: line.color });
+    }
+  },
+
+  onControlDown(info) {
+    if (!info || this.state.destroyed || this.state.screen !== "playing") {
+      return;
+    }
+    const hit = hitTest(CONTROLS, info.x, info.y);
+    if (hit === null) {
+      return;
+    }
+    this.state.pressed = hit;
+    this.paintControl(hit, true);
+  },
+
+  // A press only counts where it started. Lifting the finger somewhere else
+  // cancels it, the way a button does, so sliding off a mis-aimed arrow costs
+  // nothing.
+  onControlUp(info) {
+    const held = this.state.pressed;
+    if (held !== null) {
+      this.state.pressed = null;
+      this.paintControl(held, false);
+    }
+    if (!info || this.state.destroyed || this.state.screen !== "playing" || held === null) {
+      return;
+    }
+    if (hitTest(CONTROLS, info.x, info.y) !== held) {
+      return;
+    }
+    if (held === PAUSE) {
+      this.pauseGame();
+      return;
+    }
+    setDirection(this.state.game, STEERING[held]);
+  },
+
+  clearControls() {
+    if (this.state.canvas) {
+      hmUI.deleteWidget(this.state.canvas);
+      this.state.canvas = null;
+    }
+    this.state.pressed = null;
   },
 
   // A vertical stack of texts and buttons, centred on the board under a dimmed
@@ -598,7 +709,7 @@ Page({
   // and, with state.game already cleared, draws nothing back.
   clearHud() {
     this.drawScore();
-    this.setPauseVisible(false);
+    this.clearControls();
   },
 
   clearMenu() {
