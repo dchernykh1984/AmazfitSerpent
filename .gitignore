@@ -29,7 +29,10 @@ logs/
 *.iml
 
 # ===== AI agents =====
-.claude/
+# The shared half of .claude/ is tracked on purpose: CLAUDE.md, the skills and the
+# settings are how an agent picks this project up without being told everything
+# again. Only the per-machine half is ignored.
+.claude/settings.local.json
 .cursor/
 .windsurf/
 .gemini/
