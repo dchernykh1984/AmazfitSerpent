@@ -62,7 +62,16 @@ ask first, even though this one is bot-generated and rebuilt automatically.
 
 ## Versions
 
-`app.json` is not the source of truth. The build workflow derives `version.name`
-from `package.json` and `version.code` as `major*10000 + minor*100 + patch`, an
-ever-increasing integer the store requires. Do not hand-edit `app.json` versions
-to match; a CI check compares the two files.
+`package.json` is the source of truth; release-please bumps it and nothing else.
+`scripts/sync-app-version.mjs` derives `app.json`'s `version.name` and
+`version.code` from it, and the release build runs `npm run version:sync` before
+`zeus build`.
+
+`version.code` is `major * 10000 + minor * 100 + patch`, an ever-increasing
+integer the store demands. That packing means **minor and patch must stay under
+100** - the script refuses rather than shipping a code that would sort below the
+version already published.
+
+Do not hand-edit those fields. The committed pair can look stale between releases
+because only the build regenerates it; `npm run version:check` says whether they
+currently agree.

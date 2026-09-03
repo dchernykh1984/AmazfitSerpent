@@ -15,6 +15,8 @@ npm test            # vitest, including the page driven through doubles
 npm run lint        # eslint
 npm run format      # prettier --write
 npm run format:check
+npm run version:sync   # write package.json's version into app.json
+npm run version:check  # fail if the two disagree
 npm run build       # zeus build -> the .zab store bundle
 npm run preview     # QR preview on a real watch via Developer Mode
 ```
@@ -57,8 +59,7 @@ this box" - that is how the arrows are tested without a screen.
 ## What CI enforces
 
 Every pull request must pass: prettier, eslint, the unit tests, `actionlint`,
-commitizen, an OSV dependency scan, and a check that `app.json` and `package.json`
-agree on the version.
+commitizen, and an OSV dependency scan.
 
 - **Conventional Commits**, single-line subject. Longer rationale goes in the pull
   request description, not the commit body.
@@ -91,9 +92,15 @@ agree on the version.
 - **A widget handle is opaque.** It has no readable properties on a real watch,
   however freely the test double lets one be read - so keep any state you need to
   read back (a canvas height, a pressed control) in `state`, not on the widget.
-- **The version in `app.json` is not authoritative.** The build workflow derives
-  `version.name` and `version.code` from `package.json` at build time, because
-  release-please reformats `app.json` in a way prettier rejects.
+- **The version in `app.json` is derived, not owned.** release-please bumps
+  `package.json` and nothing else; `scripts/sync-app-version.mjs` turns that into
+  `app.json`'s `version.name` and `version.code`, and the release build runs it
+  (`npm run version:sync`) before `zeus build`. So do not hand-edit those two
+  fields, and do not be alarmed that the committed pair can look stale between
+  releases - the build regenerates it. `version.code` is
+  `major * 10000 + minor * 100 + patch`, which means **minor and patch must stay
+  under 100**; the script refuses rather than shipping a code the store would sort
+  below what is already published.
 
 ## Pull requests, review and release
 
