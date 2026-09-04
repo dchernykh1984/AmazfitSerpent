@@ -63,6 +63,9 @@ commitizen, and an OSV dependency scan.
 
 - **Conventional Commits**, single-line subject. Longer rationale goes in the pull
   request description, not the commit body.
+- **No attribution, anywhere.** A commit message is the subject and nothing else:
+  no body, no trailers, no `Co-Authored-By`. A pull request description carries no
+  "generated with" footer either. If a default adds one, strip it before pushing.
 - **Source and config stay ASCII.** The non-ASCII guard covers `*.js *.mjs *.json
 *.md *.yml`. `lib/i18n/` is excluded, because on-watch translations legitimately
   are not ASCII - so a new user-facing string goes there, never inline.
@@ -104,9 +107,22 @@ commitizen, and an OSV dependency scan.
 
 ## Pull requests, review and release
 
+Work on a branch cut from current `origin/main` - `git fetch origin && git switch -c
+<type>/<slug> origin/main` - and never commit to `main` directly. Stage only the
+files you touched (`git add <path>`), never `git add -A`: the tree can carry edits
+that are not yours.
+
 Branch protection on `main`: merges are **rebase only**, linear history, and one
 approving review is required. You cannot approve your own pull request, so merging
 your own work needs `gh pr merge <n> --rebase --admin`. Ask before using it.
+
+Read the checks from the rollup rather than `gh pr checks`, whose per-check status
+lags and can still say `pending` long after a job has actually finished:
+
+```bash
+gh pr view <n> --json statusCheckRollup \
+  --jq '[.statusCheckRollup[] | {name:(.name//.context), s:(.conclusion//.state)}]'
+```
 
 Releases go through release-please: merging to `main` maintains a release pull
 request; merging that tags a release and the build workflow attaches the `.zab`.
