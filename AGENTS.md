@@ -1,0 +1,159 @@
+# Working on Amazfit Serpent
+
+Snake as a Zepp OS mini app for **round** Amazfit watches. Published in the Zepp
+App Store as **Snake Classic**, appId `1122445`. Round screens only: the build
+targets 466 and 480, and there is no square variant on purpose.
+
+Everything runs on the watch. No side service, no phone settings screen, no
+network, and no runtime dependencies - only the `@zos/*` modules the firmware
+provides.
+
+## Commands
+
+```bash
+npm test            # vitest, including the page driven through doubles
+npm run lint        # eslint
+npm run format      # prettier --write
+npm run format:check
+npm run version:sync   # write package.json's version into app.json
+npm run version:check  # fail if the two disagree
+npm run build       # zeus build -> the .zab store bundle
+npm run preview     # QR preview on a real watch via Developer Mode
+```
+
+The Zeus CLI needs **Node 18 or 20**; on newer Node it fails to resolve its own
+modules. A tool shell may not have the right Node on PATH - check `node --version`
+before blaming the build.
+
+## How the code is organised
+
+The rule that matters: **every rule and every measurement lives in `lib/`, free of
+Zepp OS imports, so a test can reach it without a watch.** `page/index.js` only
+turns that into widgets and reacts to input.
+
+| Path                    | Owns                                                      |
+| ----------------------- | --------------------------------------------------------- |
+| `lib/snake.js`          | movement, growth, wall and self collision, food placement |
+| `lib/board.js`          | the grid inscribed in the round screen                    |
+| `lib/controls.js`       | where the arrows and pause sit, and what a tap hit        |
+| `lib/arrow.js`          | the arrow and pause icons, as stroke primitives           |
+| `lib/round-geometry.js` | chord maths keeping content off the bezel                 |
+| `lib/speed.js`          | difficulty levels and tick pacing                         |
+| `lib/scores.js`         | the persisted best score, per difficulty                  |
+| `lib/i18n/`             | `keys.js` (the contract), `labels.js` (11 tables)         |
+| `page/index.js`         | drawing, input, the game loop                             |
+| `utils/config/`         | screen size, colours, grid constants                      |
+
+`page/index.r.layout.js` exists only because Zepp OS demands a layout module per
+page; the page draws imperatively, so it exports an empty object.
+
+## Testing
+
+`vitest.config.mjs` aliases every `@zos/*` module to a hand-written double in
+`test/doubles/`, which is what lets the tests build the page, tap it, swipe it and
+assert on what it drew. When you add a Zepp API to the page, add it to the double.
+
+The UI double records canvas draw calls in order and can answer "what is drawn in
+this box" - that is how the arrows are tested without a screen.
+
+## What CI enforces
+
+Every pull request must pass: prettier, eslint, the unit tests, `actionlint`,
+commitizen, and an OSV dependency scan.
+
+- **Conventional Commits**, single-line subject. Longer rationale goes in the pull
+  request description, not the commit body.
+- **No attribution, anywhere.** A commit message is the subject and nothing else:
+  no body, no trailers, no `Co-Authored-By`. A pull request description carries no
+  "generated with" footer either. If a default adds one, strip it before pushing.
+- **Source and config stay ASCII.** The non-ASCII guard covers `*.js *.mjs *.json
+*.md *.yml`. `lib/i18n/` is excluded, because on-watch translations legitimately
+  are not ASCII - so a new user-facing string goes there, never inline.
+
+## Zepp OS traps that have already cost time
+
+- **No orphan `.js` anywhere.** Zeus globs `**/*.js`; a file not reachable from an
+  app entry becomes an extra Rollup chunk and the build dies. Dev-only files are
+  `.mjs` (`eslint.config.mjs`, `vitest.config.mjs`, `test/*.test.mjs`). Files under
+  `test/doubles/` are fine as `.js` - they are outside what Zeus globs.
+- **`zeus dev` and `zeus build` rewrite `.gitignore` and `app.json`.** Record
+  `git hash-object .gitignore` before, and `git checkout --` whatever they touched
+  after. Never make `.gitignore` read-only: Zeus then dies with EPERM.
+- **A listening canvas swallows touches**, even where a button is drawn on top of
+  it. So the control canvas is deleted whenever a menu opens, or Resume and Again
+  are dead. Text widgets over a canvas are fine; buttons are not.
+- **Canvas z-order is creation order.** The control canvas is created before the
+  board cells, and the whole board is rebuilt when a game resumes, so nothing is
+  left behind the canvas.
+- **A canvas keeps no scene graph.** "Unpressing" a control means painting its box
+  over and drawing it again; moving anything means repainting what it was on.
+- **`drawPoly` is not trustworthy.** The sibling Sokoban app found it accepted
+  without complaint on a real watch and then drawing nothing at all, and abandoned
+  it. The sibling Hex app now ships with it working. Treat it as unproven: prefer
+  `drawRect`, `drawCircle` and `drawLine`, which are known good, and verify on
+  hardware before relying on it.
+- **A widget handle is opaque.** It has no readable properties on a real watch,
+  however freely the test double lets one be read - so keep any state you need to
+  read back (a canvas height, a pressed control) in `state`, not on the widget.
+- **The version in `app.json` is derived, not owned.** release-please bumps
+  `package.json` and nothing else; `scripts/sync-app-version.mjs` turns that into
+  `app.json`'s `version.name` and `version.code`, and the release build runs it
+  (`npm run version:sync`) before `zeus build`. So do not hand-edit those two
+  fields, and do not be alarmed that the committed pair can look stale between
+  releases - the build regenerates it. `version.code` is
+  `major * 10000 + minor * 100 + patch`, which means **minor and patch must stay
+  under 100**; the script refuses rather than shipping a code the store would sort
+  below what is already published.
+
+## Pull requests, review and release
+
+Work on a branch cut from current `origin/main` - `git fetch origin && git switch -c
+<type>/<slug> origin/main` - and never commit to `main` directly. Stage only the
+files you touched (`git add <path>`), never `git add -A`: the tree can carry edits
+that are not yours.
+
+Branch protection on `main`: merges are **rebase only**, linear history, and one
+approving review is required. You cannot approve your own pull request, so merging
+your own work needs `gh pr merge <n> --rebase --admin`. Ask before using it.
+
+Read the checks from the rollup rather than `gh pr checks`, whose per-check status
+lags and can still say `pending` long after a job has actually finished:
+
+```bash
+gh pr view <n> --json statusCheckRollup \
+  --jq '[.statusCheckRollup[] | {name:(.name//.context), s:(.conclusion//.state)}]'
+```
+
+Releases go through release-please: merging to `main` maintains a release pull
+request; merging that tags a release and the build workflow attaches the `.zab`.
+
+Two things bite every time:
+
+- Workflow runs on a **bot-authored** pull request sit in `action_required` until
+  approved: `gh api -X POST repos/<owner>/<repo>/actions/runs/<id>/approve`.
+- The release branch is **sticky**. If `main` moves after the release pull request
+  exists, the branch is not rebased and its checks go stale. The fix is to delete
+  the release branch and re-run the Release Please workflow, which rebuilds it from
+  current `main`.
+
+## Skills in this repository
+
+- `.agents/skills/review-cycle` - running a review pass and landing the fixes.
+- `.agents/skills/zepp-release` - cutting a release end to end.
+- `.agents/skills/zepp-simulator` - running the app on the emulator and capturing
+  the screen from a background process.
+- `.agents/skills/zepp-store-assets` - what the Zepp store demands of screenshots
+  and icons, and how to produce them.
+
+## Coding-agent context and hooks
+
+`AGENTS.md` is the project entry point for Codex. Project procedures live in
+`.agents/skills/`; read the relevant skills before working on their task.
+Keep shared guidance consistent with `CLAUDE.md` and `.claude/skills/` when it
+changes. The Claude configuration remains available to Claude Code.
+
+Codex hooks live in `.codex/hooks.json`. Trust this checkout and review/allow the
+exact hook definitions in `/hooks` before expecting them to run. See
+`.codex/README.md` for prerequisites, supported checks and permission limits.
+Git hooks are independent: run `pre-commit install` in each clone to enable the
+configured commit, commit-message and push checks.

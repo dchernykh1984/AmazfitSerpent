@@ -1,0 +1,6 @@
+{
+  "files": "\\.(py|m?js|ya?ml|md|json)$",
+  "exclude": "(package-lock\\.json$|CHANGELOG\\.md$|/i18n/)",
+  "format_mode": "write",
+  "format_exclude": "(^|/)(node_modules|dist|build|coverage)/|package-lock\\.json$|CHANGELOG\\.md$"
+}
