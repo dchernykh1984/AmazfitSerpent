@@ -20,6 +20,8 @@ run the normal local gate before committing.
 The post-edit hook also formats supported files with the installed local Prettier
 package. Install project dependencies with `npm ci` first; it never downloads a
 formatter during an edit. Generated files and `.prettierignore` remain respected.
+Autoformat errors stay nonblocking; the local gate still reports invalid syntax
+or files that need formatting before committing.
 
 ## Permissions and Git hooks
 
